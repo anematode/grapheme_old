@@ -77,7 +77,11 @@
       return this.parentCanvas.height;
     }
 
-    translate(x, y) {
+    translate(x, y, screenCoords = false) {
+      if (screenCoords) {
+        x = this.canvasXtoPointX(x);
+        y = this.canvasYtoPointY(y);
+      }
       this.xmin += x;
       this.xmax += x;
       this.ymin += y;
@@ -196,9 +200,11 @@
       this.view = graphingCtx.view;
       this.canvas = graphingCtx.canvas;
 
-      this.DENSITY = 376;
+      this.DENSITY = 500;
       this.EPSILON = 1e-6;
       this.MAXRECURSION = 50;
+
+      this.FUDGE = 2;
     }
 
     evaluate(x) {
@@ -224,11 +230,11 @@
     }
 
     get smallestDistanceX() {
-      return 2 * this.view.xdelta / Math.max(this.canvas.width, this.DENSITY);
+      return this.FUDGE * this.view.xdelta / this.canvas.width;
     }
 
     get smallestDistanceY() {
-      return 2 * this.view.ydelta / Math.max(this.canvas.height, this.DENSITY);
+      return this.FUDGE * this.view.ydelta / this.canvas.height;
     }
 
     tooSmall(x1, x2, y1, y2) {
