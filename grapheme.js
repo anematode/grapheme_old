@@ -79,8 +79,8 @@
 
     translate(x, y, screenCoords = false) {
       if (screenCoords) {
-        x = this.canvasXtoPointX(x);
-        y = this.canvasYtoPointY(y);
+        x = this.scaleCanvasXtoPointX(x);
+        y = this.scaleCanvasYtoPointY(y);
       }
       this.xmin += x;
       this.xmax += x;
@@ -102,6 +102,14 @@
       this.ymax = zoomFactor * (this.ymax - y) + y;
 
       this.correctDeltas();
+    }
+
+    scaleCanvasXtoPointX(x) {
+      return -x * this.xdelta / this.WIDTH;
+    }
+
+    scaleCanvasYtoPointY(y) {
+      return y * this.ydelta / this.HEIGHT;
     }
 
     canvasXtoPointX(x) {
@@ -200,11 +208,11 @@
       this.view = graphingCtx.view;
       this.canvas = graphingCtx.canvas;
 
-      this.DENSITY = 500;
+      this.DENSITY = 200;
       this.EPSILON = 1e-6;
       this.MAXRECURSION = 50;
 
-      this.FUDGE = 2;
+      this.FUDGE = 10;
     }
 
     evaluate(x) {
@@ -230,11 +238,11 @@
     }
 
     get smallestDistanceX() {
-      return this.FUDGE * this.view.xdelta / this.canvas.width;
+      return this.FUDGE * this.view.xdelta / Math.max(this.canvas.width, 2 * this.FUDGE * this.DENSITY);
     }
 
     get smallestDistanceY() {
-      return this.FUDGE * this.view.ydelta / this.canvas.height;
+      return this.FUDGE * this.view.ydelta / Math.max(this.canvas.width, 2 * this.FUDGE * this.DENSITY);
     }
 
     tooSmall(x1, x2, y1, y2) {

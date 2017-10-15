@@ -13,7 +13,7 @@ window.onload = window.onresize = function() {
 
 window.onmousewheel = function(evt) {
   graphingContext.clearCanvas();
-  graphingContext.view.zoom(evt.offsetX, evt.offsetY, evt.deltaY, true);
+  graphingContext.view.zoom(evt.offsetX, evt.offsetY, evt.deltaY / 3, true);
   graphingContext.graphAll();
 }
 
@@ -48,9 +48,9 @@ let func1 = function(x) {
 let func2 = x => x*x*x;
 let func3 = x => 0;
 
-for (let j = 0; j < 5; j += 0.1) {
+for (let j = 0; j < 2; j += 0.1) {
   graphingContext.addFunction(function(x) {
-    return Math.sin(x + j) + j;
+    return Math.sin(x + j) + 4 * j;
   });
 }
 
