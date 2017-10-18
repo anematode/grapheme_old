@@ -13,7 +13,7 @@ window.onload = window.onresize = function() {
 
 window.onmousewheel = function(evt) {
   graphingContext.clearCanvas();
-  graphingContext.view.zoom(evt.offsetX, evt.offsetY, evt.deltaY / 3, true);
+  graphingContext.view.zoom(evt.offsetX, evt.offsetY, 1 + evt.deltaY / 1500, true);
   graphingContext.graphAll();
 }
 
