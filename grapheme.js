@@ -9,10 +9,6 @@
   const defaultAngleThreshold = 0.5;
   const MAXRECURSION = 30;
 
-  var Global = {
-    maxVariableLength: 32
-  }
-
   function fastATAN(y, x) {
     // Fast version of atan2, returning results in taxicab angle format
 
@@ -351,9 +347,6 @@
     NULL: new Operator('NULL', function(args) {
       return NaN;
     }),
-    NEG: new Operator('NEG', function(args) { // Negation of number
-      return -args[0];
-    }, {ownInverse: true}),
     ADD: new Operator('ADD', function(args) { // Addition, unlimited args
       return args.reduce(ADD);
     }, {associative: true, commutative: true, distributive: true}),
@@ -400,10 +393,8 @@
 
   class Variable {
     constructor(name) {
-      if (name.length > Global.maxCharacterLength) {
-        throw "Max character length of " + Global.maxCharacterLength + " exceeded.";
-      }
       this.name = name;
+      this.isVariable = true;
     }
 
     evaluate(vars) {
@@ -414,18 +405,6 @@
       return (this.name === variable.name);
     }
 
-    isConstant() {
-      return false;
-    }
-
-    isVariable() {
-      return true;
-    }
-
-    isNode() {
-      return false;
-    }
-
     deepCopy() {
       return new Variable(this.name);
     }
@@ -434,6 +413,7 @@
   class Constant {
     constructor(value) {
       this.value = +value;
+      this.isConstant = true;
     }
 
     evaluate() {
@@ -448,18 +428,6 @@
       return (Math.abs(this.value - constant.value) < eps);
     }
 
-    isConstant() {
-      return true;
-    }
-
-    isVariable() {
-      return false;
-    }
-
-    isNode() {
-      return false;
-    }
-
     deepCopy() {
       return new Constant(this.value);
     }
@@ -469,6 +437,8 @@
     constructor(name, value) {
       this.name = name;
       this.value = value;
+
+      this.isConstant = true;
     }
 
     evaluate() {
@@ -488,10 +458,6 @@
     }
 
     isVariable() {
-      return false;
-    }
-
-    isNode() {
       return false;
     }
 
@@ -516,97 +482,19 @@
   // Linear is if children nodes form a * variable + b
 
   class ASTNode {
-    constructor(op, astList) {
+    constructor(op, tree, parent) {
       this.operator = op;
-      this.tree = astList;
+      this.tree = tree;
+
+      if (!parent) {
+        this.topNode = true;
+      } else {
+        this.parent = parent;
+        this.topNode = false;
+      }
 
       this.props = {};
-    }
-
-    evaluate(vars) {
-      return (this.operator.evaluate(this.tree.map(x => x.evaluate(vars))));
-    }
-
-    isConstant() {
-      if (this.props.isConstant !== undefined) return this.props.isConstant;
-      for (let i = 0; i < this.tree.length; i++) {
-        if (!this.tree[i].isConstant()) {
-          this.props.isConstant = false;
-          return false;
-        }
-      }
-      this.props.isConstant = true;
-      return true;
-    }
-
-    isNode() {
-      return true;
-    }
-
-    deepCopy() {
-      return new ASTNode(this.operator, this.tree.map(x => x.deepCopy()));
-    }
-
-    traverseNodes(applyFunc, tail = true) {
-      if (!tail) {
-        if (applyFunc(this)) return;
-      }
-      for (let i = 0; i < this.tree.length; i++) {
-        if (this.tree[i].traverseNodes) {
-          this.tree[i].traverseNodes(applyFunc);
-        } else {
-          applyFunc(this.tree[i]);
-        }
-      }
-      if (tail) {
-        if (applyFunc(this)) return;
-      }
-    }
-
-    traverseNodesAsParent(applyFunc, tail = true, rewrite = false) {
-      for (let i = 0; i < this.tree.length; i++) {
-        if (this.tree[i].traverseNodesAsParent) {
-          if (!tail) {
-            if (rewrite) {
-              let result = applyFunc(this.tree, i);
-              if (result) this.tree[i] = result;
-            } else {
-              applyFunc(this.tree, i);
-            }
-          }
-          if (!tail && this.tree[i].traverseNodesAsParent) {
-            this.tree[i].traverseNodesAsParent(applyFunc, tail, rewrite);
-          }
-          if (tail) {
-            if (rewrite) {
-              let result = applyFunc(this.tree, i);
-              if (result) this.tree[i] = result;
-            } else {
-              applyFunc(this.tree, i);
-            }
-          }
-        }
-      }
-    }
-
-    constantValue() {
-      if (this.props.constantValue !== undefined) return this.props.constantValue;
-      if (this.isConstant()) {
-        this.props.constantValue = this.evaluate();
-        return this.props.constantValue;
-      }
-    }
-
-    isAllAddition() {
-      if (this.operator.type === 'ADD' || this.operator.type === 'NEG') {
-        for (let i = 0; i < this.tree.length; i++) {
-          if (this.tree[i].isAllAddition && !this.tree[i].isAllAddition()) {
-            return false;
-          }
-        }
-        return true;
-      }
-      return false;
+      this.isNode = true;
     }
 
     clearProps() {
@@ -614,61 +502,59 @@
     }
 
     deepClearProps() {
-      traverseNodes(function(ast) {
-        if (ast.isNode()) {
-          ast.deepClearProps();
+      for (let i = 0; i < this.tree.length; i++) {
+        if (this.tree[i].isNode) {
+          this.tree[i].deepClearProps();
         }
-      });
-    }
-  }
-
-  function collapseConstants(ast, modify = true) {
-    // Collapses constants to simple constants. If modify is true it will modify the original AST; otherwise it will return a new one
-    if (modify) {
-      ast.traverseNodesAsParent(function(ast, i) {
-        if (ast[i].isNode() && ast[i].isConstant()) {
-          return new Grapheme.Constant(ast[i].constantValue())};
-        }, false, true);
-    } else {
-      let astCopy = ast.deepCopy();
-      astCopy.traverseNodesAsParent(function(ast, i) {
-        if (ast[i].isNode() && ast[i].isConstant()) {
-          return new Grapheme.Constant(ast[i].constantValue())};
-        }, false, true);
-      return astCopy;
-    }
-  }
-
-  function collapseAdditions(ast, modify = true) {
-    // Collapses nesting addition operators into one addition operator
-    ast.traverseNodes(function(ast) {
-      if (ast.isNode() && ast.isAllAddition()) {
-        var additionList = [];
-        ast.traverseNodes(function(x) {
-          if (!x.traverseNodes) {
-            additionList.push(x);
-          }
-        });
-        ast.operator = OPS.ADD;
-        ast.tree = additionList;
       }
-    }, false, true);
-  }
+    }
 
-  function collapseMultiplications(ast, modify = true) {
-    // Collapses nesting addition operators into one addition operator
-    ast.traverseNodes(function(ast) {
-      if (ast.isNode() && ast.isAllMultiplication()) {
-        var multiplicationList = [];
-        ast.traverseNodes(function(x) {
-          if (!x.traverseNodes) {
-            multiplicationList.push(x);
-          }
-        });
-        ast.operator = OPS.MUL;
-        ast.tree = multiplicationList;
+    surfaceClearProps() {
+      this.props = {};
+      if (this.topNode) return;
+      this.parent.surfaceClearProps();
+    }
+
+    traverseBranches(applyFunc, tailCall = true) {
+      for (let i = 0; i < this.tree.length; i++) {
+        if (this.tree[i].isNode) {
+          if (!tailCall) applyFunc(this);
+          this.tree[i].traverseBranches(applyFunc, tailCall);
+          if (tailCall) applyFunc(this);
+        }
       }
-    }, false, true);
+    }
+
+    traverseNodesAsParent(applyFunc, tailCall = true) {
+      for (let i = 0; i < this.tree.length; i++) {
+        if (!tailCall) applyFunc(this, i);
+        if (this.tree[i].isNode) {
+          this.tree[i].traverseNodesAsParent(applyFunc, tailCall);
+        }
+        if (tailCall) applyFunc(this, i);
+      }
+    }
+
+    fixParents(parent) {
+      if (parent) {
+        this.parent = parent;
+        this.topNode = false;
+      }
+
+      for (let i = 0; i < this.tree.length; i++) {
+        if (this.tree[i].isNode) {
+          this.tree[i].fixParents(this);
+        }
+      }
+    }
+
+    evaluate(vars) {
+      return this.operator.evaluate(this.tree.map(x => x.evaluate(vars)));
+    }
+
+    deepCopy() {
+      return new ASTNode(this.operator, this.tree.map(x => x.deepCopy()), this.parent);
+    }
   }
 
   function parenthesesBalanced(string) {
@@ -810,7 +696,113 @@
       return null;
     }
 
-    return opStack[0];
+    opStack[0].fixParents();
+
+    return new FunctionAST(opStack[0]);
+  }
+
+  var isASTConstant = function(ast, cache = true, cacheRecursively = true) {
+    if (ast.isNode) {
+      if (ast.props.isASTConstant !== undefined) return ast.props.isASTConstant;
+      for (let i = 0; i < ast.tree.length; i++) {
+        if (!isASTConstant(ast.tree[i], cacheRecursively, cacheRecursively)) {
+          if (cache) ast.props.isASTConstant = false;
+          return false;
+        }
+      }
+      if (cache) ast.props.isASTConstant = true;
+      return true;
+    } else if (ast.isConstant) {
+      return true;
+    }
+    if (cache && ast.isNode) ast.props.isASTConstant = false;
+    return false;
+  }
+
+  var ASTConstantValue = function(ast, cache = true, cacheRecursively = true) {
+    if (isASTConstant(ast, cache, cacheRecursively)) {
+      if (!cache) {
+        return ast.evaluate();
+      } else if (cache) {
+        let result = ast.evaluate();
+        ast.props.ASTConstantValue = result;
+        return result;
+      }
+    }
+  }
+
+  var isASTAddition = function(ast, cache = true, cacheRecursively = true) {
+    if (ast.isNode) {
+      if (ast.props.isASTAddition !== undefined) return ast.props.isASTAddition;
+
+      if (ast.operator.type === 'NEG' || ast.operator.type === 'ADD') {
+        for (let i = 0; i < ast.tree.length; i++) {
+          if (!isASTAddition(ast.tree[i], cacheRecursively, cacheRecursively)) {
+            if (cache) ast.props.isASTAddition = false;
+            return false;
+          }
+        }
+      } else {
+        if (cache) ast.props.isASTConstant = false;
+        return false;
+      }
+
+      if (cache) ast.props.isASTConstant = true;
+    }
+    return true;
+  }
+
+  class FunctionAST {
+    constructor(topnode) {
+      this.tree = [topnode];
+    }
+
+    traverseNodesAsParent(applyFunc, tailCall = true) {
+      for (let i = 0; i < this.tree.length; i++) {
+        if (!tailCall) applyFunc(this, i);
+        if (this.tree[i].isNode) {
+          this.tree[i].traverseNodesAsParent(applyFunc, tailCall);
+        }
+        if (tailCall) applyFunc(this, i);
+      }
+    }
+
+    collapseConstants(modify = true) {
+      if (modify) {
+        this.traverseNodesAsParent(function(ast, i) {
+          if (isASTConstant(ast.tree[i])) {
+            ast.tree[i] = new Constant(ast.tree[i].evaluate());
+          }
+        }, false);
+      } else {
+        let newAST = this.deepCopy();
+        newAST.traverseNodesAsParent(function(ast, i) {
+          if (isASTConstant(ast.tree[i])) {
+            ast.tree[i] = new Constant(ast.tree[i].evaluate());
+          }
+        }, false);
+        return newAST;
+      }
+    }
+  }
+
+  var Interval = {
+    MUL: function(m1, m2) {
+      let k = [];
+      let next;
+      for (let i = 0; i < m1.length; i += 2) {
+        for (let j = 0; j < m2.length; j += 2) {
+          next = Math.min(m1[i] * m2[j], m1[i] * m2[j + 1], m1[i + 1] * m2[j], m1[i + 1] * m2[j + 1]);
+          k.push(next);
+          next = Math.max(m1[i] * m2[j], m1[i] * m2[j + 1], m1[i + 1] * m2[j], m1[i + 1] * m2[j + 1]);
+          k.push(next);
+        }
+      }
+      return k;
+    },
+    ADD: function(m1, m2) {
+      let k = [];
+    }
   }
 
   exports.ViewWindow = ViewWindow;
@@ -821,10 +813,11 @@
   exports.Constant = Constant;
   exports.Operator = Operator;
   exports.OPS = OPS;
-  exports.Global = Global;
   exports.stringFuncTokenizer = stringFuncTokenizer;
   exports.ASTFromStringFunc = ASTFromStringFunc;
-  exports.collapseConstants = collapseConstants;
-  exports.collapseAdditions = collapseAdditions;
+  exports.isASTConstant = isASTConstant;
+  exports.ASTConstantValue = ASTConstantValue;
+  exports.isASTAddition = isASTAddition;
+  exports.Interval = Interval;
 
 })));
