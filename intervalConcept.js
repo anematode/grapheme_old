@@ -4,10 +4,10 @@ class ViewWindow {
   constructor(parentCanvas, xmin, xmax, ymin, ymax) {
     this.parentCanvas = parentCanvas;
 
-    this.xmin = xmin || -5;
-    this.xmax = xmax || 5;
-    this.ymin = ymin || -5;
-    this.ymax = ymax || 5;
+    this.xmin = xmin;
+    this.xmax = xmax;
+    this.ymin = ymin;
+    this.ymax = ymax;
   }
 
   copyFrom(viewWindow) {
@@ -49,14 +49,6 @@ class ViewWindow {
     return this.parentCanvas.height;
   }
 
-  get xdelta() {
-    return this.xmax - this.xmin;
-  }
-
-  get ydelta() {
-    return this.ymax - this.ymin;
-  }
-
   translate(x, y, screenCoords = false) {
     // Move view window by (x, y)
     if (screenCoords) {
@@ -83,6 +75,14 @@ class ViewWindow {
   }
 
   // Transform operations
+
+  get xdelta() {
+    return this.xmax - this.xmin;
+  }
+
+  get ydelta() {
+    return this.ymax - this.ymin;
+  }
 
   scaleCanvasXtoPointX(x) {
     return -x * this.xdelta / this.WIDTH;
@@ -192,11 +192,130 @@ var Interval = {
       k.push(square(Math.max(Math.abs(m2[i]), Math.abs(m2[i + 1]))));
     }
     return k;
+  },
+  ABS: function(m2) {
+    let k = [];
+    for (let i = 0; i < m2.length; i++) {
+      if (m2[i] === 0 && m2[i + 1] === 0) {
+        k.push(0);
+        k.push(0);
+      } else if (m2[i] <= 0 && m2[i + 1] >= 0) {
+        k.push(0);
+        k.push(Math.max(Math.abs(m2[i]), Math.abs([i+1])));
+        continue;
+      } else {
+        k.push(Math.min(Math.abs(m2[i]), Math.abs([i+1])));
+        k.push(Math.max(Math.abs(m2[i]), Math.abs([i+1])));
+      }
+    }
+    return k;
+  },
+  SGN: function(m2) {
+    let k = [];
+    for (let i = 0; i < m2.length; i++) {
+      if (m2[i] < 0) {
+        k.push(-1);
+        k.push(-1);
+      }
+      if (m2[i + 1] > 0) {
+        k.push(1);
+        k.push(1);
+      }
+      if (m2[i] <= 0 && m2[i + 1] >= 0) {
+        k.push(0);
+        k.push(0);
+      }
+    }
+    return k;
+  },
+  SIN: function(m2) {
+    let k = [];
+    let smin, smax;
+    for (let i = 0; i < m2.length; i += 2) {
+      if (m2[i + 1] - m2[i] >= 2 * Math.PI) {
+        k.push(-1);
+        k.push(1);
+        continue;
+      }
+      smin = 2 * Math.PI * Math.floor((m2[i] + Math.PI / 2) / (2 * Math.PI)) + 3 * Math.PI / 2;
+      smax = 2 * Math.PI * Math.floor((m2[i] + 3 * Math.PI / 2) / (2 * Math.PI)) + Math.PI / 2;
+      if (m2[i] <= smin && smin <= m2[i + 1]) {
+        if (m2[i] <= smax && smax <= m2[i + 1]) {
+          k.push(-1);
+          k.push(1);
+          continue;
+        }
+        k.push(-1);
+        k.push(Math.max(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+      } else {
+        if (m2[i] <= smax && smax <= m2[i + 1]) {
+          k.push(Math.min(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+          k.push(1);
+          continue;
+        }
+        k.push(Math.min(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+        k.push(Math.max(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+      }
+    }
+    return k;
+  },
+  COS: function(m2) {
+    let k = [];
+    let smin, smax;
+    for (let i = 0; i < m2.length; i += 2) {
+      if (m2[i + 1] - m2[i] >= 2 * Math.PI) {
+        k.push(-1);
+        k.push(1);
+        continue;
+      }
+      smin = 2 * Math.PI * Math.floor((m2[i] + Math.PI) / (2 * Math.PI)) + Math.PI;
+      smax = 2 * Math.PI * Math.floor(m2[i] / (2 * Math.PI)) + 2 * Math.PI;
+      if (m2[i] <= smin && smin <= m2[i + 1]) {
+        if (m2[i] <= smax && smax <= m2[i + 1]) {
+          k.push(-1);
+          k.push(1);
+          continue;
+        }
+        k.push(-1);
+        k.push(Math.max(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+      } else {
+        if (m2[i] <= smax && smax <= m2[i + 1]) {
+          k.push(Math.min(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+          k.push(1);
+          continue;
+        }
+        k.push(Math.min(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+        k.push(Math.max(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+      }
+    }
+    return k;
+  },
+  TAN: function(m2) {
+    let k = [];
+    let asympt;
+    for (let i = 0; i < m2.length; i += 2) {
+      if (m2[i + 1] - m2[i] >= Math.PI) {
+        k.push(-Infinity);
+        k.push(Infinity);
+        continue;
+      }
+      asympt = Math.PI * Math.floor((m2[i] + Math.PI / 2) / Math.PI) + Math.PI / 2;
+      if (m2[i] <= asympt && asympt <= m2[i + 1]) {
+        k.push(Math.tan(m2[i]));
+        k.push(Infinity);
+        k.push(-Infinity);
+        k.push(Math.tan(m2[i+1]));
+      } else {
+        k.push(Math.tan(m2[i]));
+        k.push(Math.tan(m2[i+1]));
+      }
+    }
+    return k;
   }
 }
 
 function hf(x1, x2, y1, y2) {
-  let intervals = Interval.ADD(Interval.DIV([x1, x2]), Interval.MUL([-1, -1], [y1, y2]));
+  let intervals = Interval.ADD(Interval.TAN([x1, x2]), Interval.MUL([-1, -1], [y1, y2]));
   for (let i = 0; i < intervals.length; i += 2) {
     if (intervals[i] <= 0 && intervals[i + 1] >= 0) {
       return true;
@@ -245,6 +364,13 @@ function recurse(x1, x2, y1, y2, depth = 0) {
   if (depth > 15) {
     return;
   }
+
+  let xc1 = view.pointXtoCanvasX(x1);
+  let yc1 = view.pointYtoCanvasY(y1);
+  let xd = Math.max(view.pointXtoCanvasX(x2) - xc1, 1);
+  let yd = Math.max(view.pointYtoCanvasY(y2) - yc1, 1);
+  ctx.clearRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+
   if (hf(x1, x2, y1, y2)) {
     if (Math.abs(x1 - x2) < view.minxd) {
       if (Math.abs(y1 - y2) < view.minyd) {
@@ -273,5 +399,7 @@ function recurse(x1, x2, y1, y2, depth = 0) {
 }
 
 function graph() {
+  console.log(Date.now());
   recurse(view.xmin, view.xmax, view.ymin, view.ymax);
+  console.log(Date.now());
 }
