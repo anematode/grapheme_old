@@ -311,11 +311,15 @@ var Interval = {
       }
     }
     return k;
+  },
+  CSC: function(m2) {
+
   }
 }
 
 function hf(x1, x2, y1, y2) {
-  let intervals = Interval.ADD(Interval.TAN([x1, x2]), Interval.MUL([-1, -1], [y1, y2]));
+  let intervals = Interval.ADD(Interval.MUL([-1, -1], Interval.COS(Interval.MUL([x1, x2], Interval.SIN([x1, x2])))),
+    Interval.SIN(Interval.ADD(Interval.SIN([x1, x2]), Interval.COS([y1, y2]))));
   for (let i = 0; i < intervals.length; i += 2) {
     if (intervals[i] <= 0 && intervals[i + 1] >= 0) {
       return true;
