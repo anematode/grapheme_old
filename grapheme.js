@@ -140,6 +140,14 @@
     pointToCanvasPoint(x,y) {
       return [pointXtoCanvasX(x), pointYtoCanvasY(x)];
     }
+
+    get minxd() {
+      return 0.5 * (this.xmax - this.xmin) / (this.parentCanvas.width);
+    }
+
+    get minyd() {
+      return 0.5 * (this.ymax - this.ymin) / (this.parentCanvas.height);
+    }
   }
 
   class GraphingContext {
@@ -193,14 +201,20 @@
       this.ctx.stroke();
     }
 
-    graphAll() {
+    graphAll(quality = 1) {
       for (let i = 0; i < this.functions.length; i++) {
-        this.functions[i].graph();
+        this.functions[i].graph(quality);
       }
     }
 
-    addFunction(func) {
-      this.functions.push(new ContinuousFunction(func, this));
+    addEquation(ast) {
+      if (ast instanceof GeneralFunction) {
+        this.functions.push(ast);
+      } else if (ast instanceof Function) {
+        this.functions.push(new GeneralFunction(ast, this));
+      } else if (ast instanceof FunctionAST) {
+        this.functions.push(new GeneralFunction(ast.compilehf(), this));
+      }
     }
   }
 
@@ -388,6 +402,9 @@
     }),
     EXP: new Operator('EXP', function(args) {
       return Math.exp(args[0]);
+    }),
+    SQ: new Operator('SQ', function(args) {
+      return args[0] * args[0];
     })
   }
 
@@ -407,6 +424,14 @@
 
     deepCopy() {
       return new Variable(this.name);
+    }
+
+    flatten() {
+      if (this.name === 'x' || this.name === 'y') {
+        return "[" + this.name + "1," + this.name + "2]";
+      } else {
+        return "vars." + this.name;
+      }
     }
   }
 
@@ -430,6 +455,10 @@
 
     deepCopy() {
       return new Constant(this.value);
+    }
+
+    flatten() {
+      return "[" + this.value + "," + this.value + "]";
     }
   }
 
@@ -463,6 +492,10 @@
 
     deepCopy() {
       return this;
+    }
+
+    flatten() {
+      return "[" + this.value + "," + this.value + "]";
     }
   }
 
@@ -554,6 +587,16 @@
 
     deepCopy() {
       return new ASTNode(this.operator, this.tree.map(x => x.deepCopy()), this.parent);
+    }
+
+    flatten() {
+      let opname = this.operator.type;
+      let flattened = this.tree.map(x => x.flatten()).join(',');
+      return `Grapheme.Interval.${opname}(${flattened})`;
+    }
+
+    hf() {
+      return eval(this.flatten());
     }
   }
 
@@ -731,27 +774,6 @@
     }
   }
 
-  var isASTAddition = function(ast, cache = true, cacheRecursively = true) {
-    if (ast.isNode) {
-      if (ast.props.isASTAddition !== undefined) return ast.props.isASTAddition;
-
-      if (ast.operator.type === 'NEG' || ast.operator.type === 'ADD') {
-        for (let i = 0; i < ast.tree.length; i++) {
-          if (!isASTAddition(ast.tree[i], cacheRecursively, cacheRecursively)) {
-            if (cache) ast.props.isASTAddition = false;
-            return false;
-          }
-        }
-      } else {
-        if (cache) ast.props.isASTConstant = false;
-        return false;
-      }
-
-      if (cache) ast.props.isASTConstant = true;
-    }
-    return true;
-  }
-
   class FunctionAST {
     constructor(topnode) {
       this.tree = [topnode];
@@ -784,7 +806,24 @@
         return newAST;
       }
     }
+
+    flatten() {
+      let expr = this.tree[0].flatten();
+      return `let intervals = ${expr};
+        for (let i = 0; i < intervals.length; i += 2) {
+          if (intervals[i] <= 0 && intervals[i + 1] >= 0) {
+            return true;
+          }
+        }
+        return false;`;
+    }
+
+    compilehf() {
+      return Function("x1", "x2", "y1", "y2", this.flatten());
+    }
   }
+
+  var square = x => x*x;
 
   var Interval = {
     MUL: function(m1, m2) {
@@ -802,6 +841,322 @@
     },
     ADD: function(m1, m2) {
       let k = [];
+      for (let i = 0; i < m1.length; i += 2) {
+        for (let j = 0; j < m2.length; j += 2) {
+          k.push(m1[i] + m2[j]);
+          k.push(m1[i + 1] + m2[j + 1]);
+        }
+      }
+      return k;
+    },
+    DIV: function(m2) {
+      let k = [];
+      let d1, d2;
+      for (let i = 0; i < m2.length; i += 2) {
+        if (m2[i] === 0 && m2[i + 1] === 0) continue;
+        if (m2[i] <= 0 && m2[i + 1] >= 0) {
+          k.push(-Infinity);
+          k.push(1 / m2[i]);
+          k.push(1 / m2[i + 1]);
+          k.push(Infinity);
+          continue;
+        }
+        d1 = 1 / m2[i + 1];
+        d2 = 1 / m2[i];
+        k.push(Math.min(d1, d2));
+        k.push(Math.max(d1, d2));
+      }
+      return k;
+    },
+    SQ: function(m2) {
+      let k = [];
+      for (let i = 0; i < m2.length; i += 2) {
+        if (m2[i] <= 0 && m2[i + 1] >= 0) {
+          k.push(0);
+          k.push(square(Math.max(Math.abs(m2[i]), Math.abs(m2[i + 1]))));
+          continue;
+        }
+        k.push(square(Math.min(Math.abs(m2[i]), Math.abs(m2[i + 1]))));
+        k.push(square(Math.max(Math.abs(m2[i]), Math.abs(m2[i + 1]))));
+      }
+      return k;
+    },
+    ABS: function(m2) {
+      let k = [];
+      for (let i = 0; i < m2.length; i++) {
+        if (m2[i] === 0 && m2[i + 1] === 0) {
+          k.push(0);
+          k.push(0);
+        } else if (m2[i] <= 0 && m2[i + 1] >= 0) {
+          k.push(0);
+          k.push(Math.max(Math.abs(m2[i]), Math.abs([i+1])));
+          continue;
+        } else {
+          k.push(Math.min(Math.abs(m2[i]), Math.abs([i+1])));
+          k.push(Math.max(Math.abs(m2[i]), Math.abs([i+1])));
+        }
+      }
+      return k;
+    },
+    SGN: function(m2) {
+      let k = [];
+      for (let i = 0; i < m2.length; i++) {
+        if (m2[i] < 0) {
+          k.push(-1);
+          k.push(-1);
+        }
+        if (m2[i + 1] > 0) {
+          k.push(1);
+          k.push(1);
+        }
+        if (m2[i] <= 0 && m2[i + 1] >= 0) {
+          k.push(0);
+          k.push(0);
+        }
+      }
+      return k;
+    },
+    SIN: function(m2) {
+      let k = [];
+      let smin, smax;
+      for (let i = 0; i < m2.length; i += 2) {
+        if (m2[i + 1] - m2[i] >= 2 * Math.PI) {
+          k.push(-1);
+          k.push(1);
+          continue;
+        }
+        smin = 2 * Math.PI * Math.floor((m2[i] + Math.PI / 2) / (2 * Math.PI)) + 3 * Math.PI / 2;
+        smax = 2 * Math.PI * Math.floor((m2[i] + 3 * Math.PI / 2) / (2 * Math.PI)) + Math.PI / 2;
+        if (m2[i] <= smin && smin <= m2[i + 1]) {
+          if (m2[i] <= smax && smax <= m2[i + 1]) {
+            k.push(-1);
+            k.push(1);
+            continue;
+          }
+          k.push(-1);
+          k.push(Math.max(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+        } else {
+          if (m2[i] <= smax && smax <= m2[i + 1]) {
+            k.push(Math.min(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+            k.push(1);
+            continue;
+          }
+          k.push(Math.min(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+          k.push(Math.max(Math.sin(m2[i]), Math.sin(m2[i + 1])));
+        }
+      }
+      return k;
+    },
+    COS: function(m2) {
+      let k = [];
+      let smin, smax;
+      for (let i = 0; i < m2.length; i += 2) {
+        if (m2[i + 1] - m2[i] >= 2 * Math.PI) {
+          k.push(-1);
+          k.push(1);
+          continue;
+        }
+        smin = 2 * Math.PI * Math.floor((m2[i] + Math.PI) / (2 * Math.PI)) + Math.PI;
+        smax = 2 * Math.PI * Math.floor(m2[i] / (2 * Math.PI)) + 2 * Math.PI;
+        if (m2[i] <= smin && smin <= m2[i + 1]) {
+          if (m2[i] <= smax && smax <= m2[i + 1]) {
+            k.push(-1);
+            k.push(1);
+            continue;
+          }
+          k.push(-1);
+          k.push(Math.max(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+        } else {
+          if (m2[i] <= smax && smax <= m2[i + 1]) {
+            k.push(Math.min(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+            k.push(1);
+            continue;
+          }
+          k.push(Math.min(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+          k.push(Math.max(Math.cos(m2[i]), Math.cos(m2[i + 1])));
+        }
+      }
+      return k;
+    },
+    TAN: function(m2) {
+      let k = [];
+      let asympt;
+      for (let i = 0; i < m2.length; i += 2) {
+        if (m2[i + 1] - m2[i] >= Math.PI) {
+          k.push(-Infinity);
+          k.push(Infinity);
+          continue;
+        }
+        asympt = Math.PI * Math.floor((m2[i] + Math.PI / 2) / Math.PI) + Math.PI / 2;
+        if (m2[i] <= asympt && asympt <= m2[i + 1]) {
+          k.push(Math.tan(m2[i]));
+          k.push(Infinity);
+          k.push(-Infinity);
+          k.push(Math.tan(m2[i+1]));
+        } else {
+          k.push(Math.tan(m2[i]));
+          k.push(Math.tan(m2[i+1]));
+        }
+      }
+      return k;
+    },
+    CSC: function(m2) {
+
+    }
+  }
+
+  class GeneralFunction {
+    constructor(hf, graphingCtx) {
+      this.hf = hf;
+      this.graphingCtx = graphingCtx;
+      this.view = graphingCtx.view;
+      this.canvas = graphingCtx.canvas;
+
+      this.HEAP = new Float32Array(250);
+      this.graphing = false;
+      this.cancelGraph = false;
+    }
+
+    asyncGraphRangeDFS(x1, x2, y1, y2, quality = 1, callback, startingIndex = -1) {
+      this.graphing = true;
+
+      var HEAP = this.HEAP;
+      var hf = this.hf;
+      var view = this.view;
+      var lastPauseTime = Date.now();
+      var minxd = this.view.minxd;
+      var minyd = this.view.minyd;
+
+      /**if (startingIndex === -1) {
+        var xc1 = view.pointXtoCanvasX(x1);
+        var yc1 = view.pointYtoCanvasY(y1);
+        var xd = view.pointXtoCanvasX(x2) - xc1;
+        var yd = view.pointYtoCanvasY(y2) - yc1;
+        ctx.clearRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+      }**/
+
+      let x1t,x2t,y1t,y2t,xc1,yc1,xd,yd;
+
+      var index = (startingIndex >= 0) ? startingIndex : 0;
+      var depth = 0;
+
+      if (hf(x1, x2, y1, y2)) {
+        if (startingIndex === -1) {
+          HEAP[0] = x1;
+          HEAP[1] = x2;
+          HEAP[2] = y1;
+          HEAP[3] = y2;
+
+          index += 4;
+        }
+
+        while (index >= 4) {
+          if (index < 60) {
+            if (Date.now() > lastPauseTime + 1000 / 60) {
+              if (this.cancelGraph) {
+                this.cancelGraph = false;
+                return;
+              }
+              var that = this;
+              setTimeout(function() {
+                if (view.xmin !== x1 || view.xmax !== x2 || view.ymin !== y1 || view.ymax !== y2) {
+                  that.graphing = false;
+                  return;
+                }
+                that.asyncGraphRangeDFS(x1, x2, y1, y2, quality, callback, startingIndex = index);
+              }, 5);
+              return;
+            }
+          }
+
+          y2t = HEAP[index - 1];
+          y1t = HEAP[index - 2];
+          x2t = HEAP[index - 3];
+          x1t = HEAP[index - 4];
+
+          if (hf(x1t, x2t, y1t, y2t)) {
+            if (Math.abs(x1t - x2t) < quality * minxd) {
+              if (Math.abs(y1t - y2t) < quality * minyd) {
+                xc1 = view.pointXtoCanvasX(x1t);
+                yc1 = view.pointYtoCanvasY(y1t);
+                xd = Math.max(view.pointXtoCanvasX(x2t) - xc1, quality / 2, 1);
+                yd = Math.max(view.pointYtoCanvasY(y2t) - yc1, quality / 2, 1);
+
+                this.graphingCtx.ctx.fillRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+
+                index -= 4;
+              } else {
+                index -= 4;
+
+                HEAP[index] = x1t;
+                HEAP[index + 1] = x2t;
+                HEAP[index + 2] = y1t;
+                HEAP[index + 3] = (y1t + y2t) / 2;
+                HEAP[index + 4] = x1t;
+                HEAP[index + 5] = x2t;
+                HEAP[index + 6] = (y1t + y2t) / 2;
+                HEAP[index + 7] = y2t;
+
+                index += 8;
+              }
+            } else {
+              if (Math.abs(y1t - y2t) < quality * minyd) {
+                index -= 4;
+
+                HEAP[index] = x1t;
+                HEAP[index + 1] = (x1t + x2t) / 2;
+                HEAP[index + 2] = y1t;
+                HEAP[index + 3] = y2t;
+                HEAP[index + 4] = (x1t + x2t) / 2;
+                HEAP[index + 5] = x2t;
+                HEAP[index + 6] = y1t;
+                HEAP[index + 7] = y2t;
+
+                index += 8;
+              } else {
+                index -= 4;
+
+                HEAP[index] = x1t;
+                HEAP[index + 1] = (x1t+x2t)/2;
+                HEAP[index + 2] = y1t;
+                HEAP[index + 3] = (y1t+y2t)/2;
+                HEAP[index + 4] = (x1t+x2t)/2;
+                HEAP[index + 5] = x2t;
+                HEAP[index + 6] = (y1t+y2t)/2;
+                HEAP[index + 7] = y2t;
+                HEAP[index + 8] = x1t;
+                HEAP[index + 9] = (x1t+x2t)/2;
+                HEAP[index + 10] = (y1t+y2t)/2;
+                HEAP[index + 11] = y2t;
+                HEAP[index + 12] = (x1t+x2t)/2;
+                HEAP[index + 13] = x2t;
+                HEAP[index + 14] = y1t;
+                HEAP[index + 15] = (y1t+y2t)/2;
+
+                index += 16;
+              }
+            }
+          } else {
+            index -= 4;
+          }
+        }
+      }
+
+      this.graphing = false;
+
+      if (callback) {
+        callback();
+      }
+    }
+
+    graph(quality = 1) {
+      this.asyncGraphRangeDFS(this.view.xmin, this.view.xmax, this.view.ymin, this.view.ymax, quality);
+    }
+
+    cancelGraphing() {
+      if (this.graphing) {
+        this.cancelGraph = true;
+      }
     }
   }
 
@@ -817,7 +1172,7 @@
   exports.ASTFromStringFunc = ASTFromStringFunc;
   exports.isASTConstant = isASTConstant;
   exports.ASTConstantValue = ASTConstantValue;
-  exports.isASTAddition = isASTAddition;
   exports.Interval = Interval;
+  exports.GeneralFunction = GeneralFunction;
 
 })));

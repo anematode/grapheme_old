@@ -128,6 +128,9 @@ class ViewWindow {
 let canvas = document.getElementsByTagName('canvas')[0];
 let ctx = canvas.getContext('2d');
 
+ctx.imageSmoothingEnabled = true;
+ctx.translate(0.5, 0.5);
+
 function updateCanvasDimensions() {
   canvas.width = window.innerWidth;
   canvas.height = window.innerHeight;
@@ -340,7 +343,6 @@ window.onmousewheel = function(evt) {
 
   }
 
-  clearCanvas();
   view.zoom(evt.offsetX, evt.offsetY, 1 + evt.deltaY / 1500, true);
   graph();
 
@@ -401,7 +403,6 @@ function graphRange(x1, x2, y1, y2, quality = 1, startingIndex = -1) {
     }
 
     while (index >= 4) {
-
       if (index < 40) {
         if (Date.now() > lastPauseTime + 1000 / 60) {
           lastPauseTime = Date.now();
@@ -483,6 +484,7 @@ function graphRange(x1, x2, y1, y2, quality = 1, startingIndex = -1) {
           }
         }
       } else {
+
         index -= 4;
       }
     }
@@ -503,6 +505,6 @@ function graph() {
   if (lastPauseTime < lastScrollTime + 200) {
     graphRange(view.xmin, view.xmax, view.ymin, view.ymax, 24);
   } else {
-    graphRange(view.xmin, view.xmax, view.ymin, view.ymax, 1);
+    graphRange(view.xmin, view.xmax, view.ymin, view.ymax, 0.5);
   }
 }

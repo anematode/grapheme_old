@@ -8,14 +8,26 @@ function updateCanvasDimensions() {
 
 window.onload = window.onresize = function() {
   updateCanvasDimensions();
-  graphingContext.graphAll();
 }
 
+var graphTimeout;
+
 window.onmousewheel = function(evt) {
+  try {
+    clearTimeout(niceGraphTimer);
+  } catch(e) {}
+
   graphingContext.clearCanvas();
   graphingContext.view.zoom(evt.offsetX, evt.offsetY, 1 + evt.deltaY / 1500, true);
-  graphingContext.graphAll();
+  graphingContext.graphAll(6);
+
+  niceGraphTimer = setTimeout(function() {
+    graphingContext.clearCanvas();
+    graphingContext.graphAll(1);
+  }, 200);
 }
+
+var lastScrollTime = 0;
 
 var mousedown, prevMouseX, prevMouseY;
 
@@ -26,14 +38,26 @@ window.onmousedown = function(evt) {
   mousedown = true;
 }
 
+var niceGraphTimer = null;
+
 window.onmousemove = function(evt) {
   if (mousedown) {
+    try {
+      clearTimeout(niceGraphTimer);
+    } catch(e) {}
+
     graphingContext.clearCanvas();
     graphingContext.view.translate(evt.offsetX - prevMouseX, evt.offsetY - prevMouseY, true);
 
     prevMouseX = evt.offsetX;
     prevMouseY = evt.offsetY;
-    graphingContext.graphAll();
+
+    graphingContext.graphAll(6);
+
+    niceGraphTimer = setTimeout(function() {
+      graphingContext.clearCanvas();
+      graphingContext.graphAll(1);
+    }, 200);
   }
 }
 
@@ -42,18 +66,6 @@ window.onmouseup = function(evt) {
 }
 
 let graphingContext = new Grapheme.GraphingContext(canvas, ctx);
-let func1 = function(x) {
-  return x * x;
-}
-let func2 = x => x*x*x;
-let func3 = x => 0;
 
-for (let j = 0; j < 2; j += 0.1) {
-  graphingContext.addFunction(function(x) {
-    return Math.sin(x + j) + 4 * j;
-  });
-}
-
-graphingContext.addFunction(func1);
-graphingContext.addFunction(func2);
-graphingContext.addFunction(func3);
+graphingContext.addEquation(Grapheme.ASTFromStringFunc("ADD(SQ(x&),MUL(-1&,y&))"))
+graphingContext.addEquation(Grapheme.ASTFromStringFunc("ADD(TAN(x&),MUL(-1&,y&))"))
