@@ -325,11 +325,22 @@ function hf(x1, x2, y1, y2) {
 }
 
 var view = new ViewWindow(canvas, -5, 5, -5, 5);
+var lastScrollTime = 0;
 
 window.onmousewheel = function(evt) {
+  lastScrollTime = Date.now();
+
+  try {
+    clearTimeout(nextGraphTimeout);
+  } catch (e) {
+
+  }
+
   clearCanvas();
   view.zoom(evt.offsetX, evt.offsetY, 1 + evt.deltaY / 1500, true);
   graph();
+
+  nextGraphTimeout = setTimeout(graph, 201);
 }
 
 var mousedown, prevMouseX, prevMouseY;
@@ -360,46 +371,134 @@ function clearCanvas() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-function recurse(x1, x2, y1, y2, depth = 0) {
-  if (depth > 15) {
-    return;
+var HEAP = new Float32Array(500);
+
+function graphRange(x1, x2, y1, y2, quality = 1, startingIndex = -1) {
+  if (startingIndex === -1) {
+    var xc1 = view.pointXtoCanvasX(x1);
+    var yc1 = view.pointYtoCanvasY(y1);
+    var xd = view.pointXtoCanvasX(x2) - xc1;
+    var yd = view.pointYtoCanvasY(y2) - yc1;
+    ctx.clearRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
   }
 
-  let xc1 = view.pointXtoCanvasX(x1);
-  let yc1 = view.pointYtoCanvasY(y1);
-  let xd = Math.max(view.pointXtoCanvasX(x2) - xc1, 1);
-  let yd = Math.max(view.pointYtoCanvasY(y2) - yc1, 1);
-  ctx.clearRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+  let x1t,x2t,y1t,y2t;
+
+  var index = (startingIndex >= 0) ? startingIndex : 0;
 
   if (hf(x1, x2, y1, y2)) {
-    if (Math.abs(x1 - x2) < view.minxd) {
-      if (Math.abs(y1 - y2) < view.minyd) {
-        let xc1 = view.pointXtoCanvasX(x1);
-        let yc1 = view.pointYtoCanvasY(y1);
-        let xd = Math.max(view.pointXtoCanvasX(x2) - xc1, 1);
-        let yd = Math.max(view.pointYtoCanvasY(y2) - yc1, 1);
-        ctx.fillRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+    if (startingIndex === -1) {
+      HEAP[0] = x1;
+      HEAP[1] = x2;
+      HEAP[2] = y1;
+      HEAP[3] = y2;
+
+      index += 4;
+    }
+
+    while (index >= 4) {
+
+      if (index < 40) {
+        if (Date.now() > lastPauseTime + 1000 / 60) {
+          lastPauseTime = Date.now();
+          setTimeout(function() {
+            if (view.xmin !== x1 || view.xmax !== x2 || view.ymin !== y1 || view.ymax !== y2) {
+              return;
+            }
+            graphRange(x1, x2, y1, y2, quality, startingIndex = index);
+          }, 5);
+          return;
+        }
+      }
+
+      y2t = HEAP[index - 1];
+      y1t = HEAP[index - 2];
+      x2t = HEAP[index - 3];
+      x1t = HEAP[index - 4];
+
+      if (hf(x1t, x2t, y1t, y2t)) {
+        if (Math.abs(x1t - x2t) < quality * view.minxd) {
+          if (Math.abs(y1t - y2t) < quality * view.minyd) {
+            xc1 = view.pointXtoCanvasX(x1t);
+            yc1 = view.pointYtoCanvasY(y1t);
+            xd = Math.max(view.pointXtoCanvasX(x2t) - xc1, quality / 2, 1);
+            yd = Math.max(view.pointYtoCanvasY(y2t) - yc1, quality / 2, 1);
+
+            ctx.fillRect(xc1 + 0.5, yc1 + 0.5, xd + 0.5, yd + 0.5);
+
+            index -= 4;
+          } else {
+            index -= 4;
+
+            HEAP[index] = x1t;
+            HEAP[index + 1] = x2t;
+            HEAP[index + 2] = y1t;
+            HEAP[index + 3] = (y1t + y2t) / 2;
+            HEAP[index + 4] = x1t;
+            HEAP[index + 5] = x2t;
+            HEAP[index + 6] = (y1t + y2t) / 2;
+            HEAP[index + 7] = y2t;
+
+            index += 8;
+          }
+        } else {
+          if (Math.abs(y1t - y2t) < quality * view.minyd) {
+            index -= 4;
+
+            HEAP[index] = x1t;
+            HEAP[index + 1] = (x1t + x2t) / 2;
+            HEAP[index + 2] = y1t;
+            HEAP[index + 3] = y2t;
+            HEAP[index + 4] = (x1t + x2t) / 2;
+            HEAP[index + 5] = x2t;
+            HEAP[index + 6] = y1t;
+            HEAP[index + 7] = y2t;
+
+            index += 8;
+          } else {
+            index -= 4;
+
+            HEAP[index] = x1t;
+            HEAP[index + 1] = (x1t+x2t)/2;
+            HEAP[index + 2] = y1t;
+            HEAP[index + 3] = (y1t+y2t)/2;
+            HEAP[index + 4] = (x1t+x2t)/2;
+            HEAP[index + 5] = x2t;
+            HEAP[index + 6] = (y1t+y2t)/2;
+            HEAP[index + 7] = y2t;
+            HEAP[index + 8] = x1t;
+            HEAP[index + 9] = (x1t+x2t)/2;
+            HEAP[index + 10] = (y1t+y2t)/2;
+            HEAP[index + 11] = y2t;
+            HEAP[index + 12] = (x1t+x2t)/2;
+            HEAP[index + 13] = x2t;
+            HEAP[index + 14] = y1t;
+            HEAP[index + 15] = (y1t+y2t)/2;
+
+            index += 16;
+          }
+        }
       } else {
-        recurse(x1, (x1 + x2) / 2, y1, y2, depth + 1);
-        recurse((x1 + x2) / 2, x2, y1, y2, depth + 1);
-        return;
+        index -= 4;
       }
-    } else {
-      if (Math.abs(y1 - y2) < view.minyd) {
-        recurse(x1, x2, y1, (y1 + y2) / 2, depth + 1);
-        recurse(x1, x2, (y1 + y2) / 2, y2, depth + 1);
-        return;
-      }
-      recurse(x1, (x1 + x2) / 2, y1, (y1 + y2) / 2, depth + 1);
-      recurse(x1, (x1 + x2) / 2, (y1 + y2) / 2, y2, depth + 1);
-      recurse((x1 + x2) / 2, x2, y1, (y1 + y2) / 2, depth + 1);
-      recurse((x1 + x2) / 2, x2, (y1 + y2) / 2, y2, depth + 1);
     }
   }
 }
 
+var lastPauseTime = 0;
+var nextGraphTimeout = null;
+
 function graph() {
-  console.log(Date.now());
-  recurse(view.xmin, view.xmax, view.ymin, view.ymax);
-  console.log(Date.now());
+  lastPauseTime = Date.now();
+
+  var prevxmin = view.xmin;
+  var prevxmax = view.xmax;
+  var prevymin = view.ymin;
+  var prevymax = view.ymax;
+
+  if (lastPauseTime < lastScrollTime + 200) {
+    graphRange(view.xmin, view.xmax, view.ymin, view.ymax, 24);
+  } else {
+    graphRange(view.xmin, view.xmax, view.ymin, view.ymax, 1);
+  }
 }
