@@ -216,6 +216,12 @@
         this.functions.push(new GeneralFunction(ast.compilehf(), this));
       }
     }
+
+    cancelGraphing() {
+      for (let i = 0; i < this.functions.length; i++) {
+        this.functions[i].cancelGraphing();
+      }
+    }
   }
 
   class StaticLine {
@@ -596,7 +602,7 @@
     }
 
     hf() {
-      return eval(this.flatten());
+      return Function(this.flatten());
     }
   }
 

@@ -22,6 +22,7 @@ window.onmousewheel = function(evt) {
   graphingContext.graphAll(6);
 
   niceGraphTimer = setTimeout(function() {
+    graphingContext.cancelGraphing();
     graphingContext.clearCanvas();
     graphingContext.graphAll(1);
   }, 200);
@@ -55,6 +56,7 @@ window.onmousemove = function(evt) {
     graphingContext.graphAll(6);
 
     niceGraphTimer = setTimeout(function() {
+      graphingContext.cancelGraphing();
       graphingContext.clearCanvas();
       graphingContext.graphAll(1);
     }, 200);
