@@ -61,11 +61,6 @@ class GraphemeContext {
       this.widgets[i].setParentIndex(i);
     }
   }
-
-  bringToTop(index) {
-    if (index >= this.widgets.length) return;
-    let movedElement = this.widgets[index];
-
-    for (let i = index; )
-  }
 }
+
+export { GraphemeContext };
