@@ -1,4 +1,4 @@
-import { GraphemeContext } from './GraphemeContext.js';
+import { Activity } from './Activity.js';
 
 class Widget {
   constructor(x, y, width, height, parent, parentIndex) {
@@ -22,8 +22,13 @@ class Widget {
   }
 
   setParent(parent) {
-    if (parent instanceof GraphemeContext) {
+    if (parent && parent instanceof Activity) {
       this.parent = parent;
+
+      this.ctx = parent.ctx;
+      this.canvas = parent.canvas;
+    } else {
+      console.error('Parent not instance of Grapheme.Activity.');
     }
   }
 
@@ -37,11 +42,12 @@ class Widget {
 class TestWidget extends Widget {
   constructor(x, y, width, height, parent, parentIndex) {
     super(x, y, width, height, parent, parentIndex);
-    this.testValue = "udder";
   }
 
-  method(x) {
-    return x*x;
+  render() {
+    if (this.ctx) {
+      this.ctx.fillRect(this.x, this.y, this.width, this.height);
+    }
   }
 }
 

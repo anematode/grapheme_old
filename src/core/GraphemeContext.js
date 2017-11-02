@@ -1,64 +1,32 @@
 class GraphemeContext {
-  constructor(canvas, ctx) {
-    this.canvas = canvas;
-    this.ctx = ctx || canvas.getContext('2d');
-
-    this.widgets = [];
-    this.variables = {};
-    this.functions = [];
+  constructor(activities, vars, props) {
+    this.activities = activities || [];
+    this.vars = vars || {};
+    this.props = props || {};
   }
 
-  get width() {
-    return this.canvas.width;
+  addActivity(activity) {
+    activity.setParent(this);
+    this.activities.push(activity);
+    this.updateActivityIndices();
   }
 
-  get height() {
-    return this.canvas.height;
+  get activityCount() {
+    return this.activities.length;
   }
 
-  render(timelimit = 1000 / 60) {
-    // Render all widgets within a certain time limit; if time limit passed, return false, otherwise return true.
-    if (timelimit) {
-      var start = Date.now();
-      this.renderBackground();
-      if (Date.now() - start > timelimit) return false;
-      for (let i = 0; i < this.widgets.length; i++) {
-        this.widgets[i].render();
-        if (Date.now() - start > timelimit) {
-          return false;
-        }
-      }
-      return true;
-    } else {
-      for (let i = 0; i < this.widgets.length; i++) {
-        this.widgets[i].render();
-      }
-    }
-  }
+  destroyActivity(index) {
+    if (index >= this.activities.length) return;
 
-  get widgetCount() {
-    return this.widgets.length;
-  }
-
-  addWidget(widget) {
-    widget.setParent(this);
-    this.widgets.push(widget);
+    this.activities[index].destroyChildren();
+    this.activities.splice(index, 1);
 
     this.updateWidgetIndices();
   }
 
-  destroyWidget(index) {
-    if (index >= this.widgets.length) return;
-
-    this.widgets[index].destroyChildren();
-    this.widgets.splice(index, 1);
-
-    this.updateWidgetIndices();
-  }
-
-  updateWidgetIndices() {
-    for (let i = 0; i < this.widgets.length; i++) {
-      this.widgets[i].setParentIndex(i);
+  updateActivityIndices() {
+    for (let i = 0; i < this.activities.length; i++) {
+      this.activities[i].setParentIndex(i);
     }
   }
 }

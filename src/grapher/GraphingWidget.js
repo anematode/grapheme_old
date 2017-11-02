@@ -1,5 +1,6 @@
 import {FunctionAST} from './FunctionAST.js';
 import {GeneralEquation, GeneralInequality} from './GeneralEquation.js';
+import {Widget} from '../core/Widget.js';
 
 // Exports
 
@@ -130,7 +131,7 @@ class ViewWindow {
   }
 }
 
-class GraphingContext {
+class GraphingWidget {
   constructor(canvas, ctx, settings) {
     this.canvas = canvas;
     this.ctx = ctx;
@@ -204,4 +205,4 @@ class GraphingContext {
   }
 }
 
-export {ViewWindow, GraphingContext};
+export {ViewWindow, GraphingWidget};

@@ -67,7 +67,7 @@ window.onmouseup = function(evt) {
   mousedown = false;
 }
 
-let graphingContext = new Grapheme.GraphingContext(canvas, ctx);
+let graphingContext = new Grapheme.GraphingWidget(canvas, ctx);
 
 graphingContext.addEquation(Grapheme.ASTFromStringFunc("ADD(SQ(x&),MUL(-1&,y&))"))
 graphingContext.addEquation(Grapheme.ASTFromStringFunc("ADD(TAN(x&),MUL(-1&,y&))"))
